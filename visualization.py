@@ -18,7 +18,7 @@ def fig_to_image(fig):
 
 
 @torch.no_grad()
-def interpolate(G, z, shifts_r, shifts_count, dim, deformator=None, with_central_border=True):
+def interpolate(G, z, shifts_r, shifts_count, dim, deformator=None, with_central_border=False):
     shifted_images = []
     for shift in np.arange(-shifts_r, shifts_r + 1e-9, shifts_r / shifts_count):
         if deformator is not None:
@@ -47,7 +47,7 @@ def add_border(tensor):
 @torch.no_grad()
 def make_interpolation_chart(G, deformator=None, z=None,
                              shifts_r=10, shifts_count=5,
-                             dims=None, dims_count=10, **kwargs):
+                             dims=None, dims_count=10, texts=None, **kwargs):
     with_deformation = deformator is not None
     if with_deformation:
         deformator_is_training = deformator.training
@@ -58,7 +58,6 @@ def make_interpolation_chart(G, deformator=None, z=None,
         original_img = G(z).cpu()
     else:
         original_img = G(z).cpu()
-
     imgs = []
     if dims is None:
         dims = range(dims_count)
@@ -70,10 +69,14 @@ def make_interpolation_chart(G, deformator=None, z=None,
 
     axs[0].axis('off')
     axs[0].imshow(to_image(original_img, True))
-    for ax, shifts_imgs, dim in zip(axs[1:], imgs, dims):
+
+    if texts is None:
+        texts = dims
+    for ax, shifts_imgs, text in zip(axs[1:], imgs, texts):
         ax.axis('off')
-        ax.imshow(to_image(make_grid(shifts_imgs, nrow=(2 * shifts_count + 1)), True))
-        ax.text(0, 0, str(dim), fontsize=4)
+        plt.subplots_adjust(left=0.5)
+        ax.imshow(to_image(make_grid(shifts_imgs, nrow=(2 * shifts_count + 1), padding=1), True))
+        ax.text(-20, 21, str(text), fontsize=10)
 
     if deformator is not None and deformator_is_training:
         deformator.train()
