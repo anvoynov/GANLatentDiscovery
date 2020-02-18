@@ -11,7 +11,7 @@ from tqdm import tqdm_notebook
 def binary_classifier(train_dataloader, val_dataloader,
                       criterion=torch.nn.CrossEntropyLoss(), verbose=True, size=None):
     channels = next(iter(train_dataloader))[0].shape[1]
-    model = PseudoLabelClassifier(channels).cuda().train()
+    model = PseudoLabelClassifier(channels=channels).cuda().train()
     opt = torch.optim.Adam(model.parameters())
     val_loss = 0.0
     accuracy = 0.0

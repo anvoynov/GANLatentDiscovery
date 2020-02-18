@@ -49,4 +49,12 @@ def load_from_dir(root_dir, model_index=None, G_weights=None):
     if os.path.isfile(shift_model_path):
         shift_predictor.load_state_dict(torch.load(shift_model_path))
 
+    # try to load dims annotation
+    directions_json = os.path.join(root_dir, 'directions.json')
+    if os.path.isfile(directions_json):
+        with open(directions_json, 'r') as f:
+            directions_dict = json.load(f)
+            setattr(deformator, 'directions_dict', directions_dict)
+
+
     return deformator.eval().cuda(), G.eval().cuda(), shift_predictor.eval().cuda()
