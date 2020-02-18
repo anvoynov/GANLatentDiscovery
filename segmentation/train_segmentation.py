@@ -22,24 +22,24 @@ from latent_deformator import LatentDeformator
 class SegmentationTrainParams(object):
     def __init__(self, **kwargs):
         self.rate = 0.005
-        self.weight_decay = 1e-5
-        self.steps_per_rate_decay = 3000
+        self.weight_decay = 0.0
+        self.steps_per_rate_decay = 4000
         self.rate_decay = 0.2
 
-        self.latent_shift_r = 22
-        self.mask_thr = 0.6
-        self.use_diff = True
+        self.latent_shift_r = 26
+        self.mask_thr = 0.99
+        self.use_diff = False
 
         self.batch_size = 64
-        self.shifted_img_prob = 0.1
+        self.shifted_img_prob = 0.0
 
         self.n_steps = int(1e+4)
         self.steps_per_log = 100
         self.steps_per_checkpoint_save = 1000
         self.test_steps = 10
 
-        self.mask_size_low = 0.0
-        self.mask_size_up = 1.0
+        self.mask_size_low = 0.05
+        self.mask_size_up = 0.5
 
         for key, val in kwargs.items():
             if val is not None:
