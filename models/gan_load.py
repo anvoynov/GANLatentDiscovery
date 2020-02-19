@@ -64,7 +64,7 @@ def make_proggan(weights_root):
 
 
 def make_external(gan_dir):
-    gan = load_model_from_state_dict(gan_dir)[0]
+    gan = load_model_from_state_dict(gan_dir)
     G = gan.model.eval()
     setattr(G, 'dim_z', gan.distribution.dim)
 

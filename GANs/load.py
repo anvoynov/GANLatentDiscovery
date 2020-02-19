@@ -3,7 +3,6 @@ import json
 import torch
 from GANs.models.sngan.generators.sn_gen_resnet import SN_RES_GEN_CONFIGS, make_resnet_generator
 from GANs.models.sngan.generators.sn_sngen_resnet import make_snresnet_generator
-from GANs.models.sngan.discriminators.sn_dis_resnet import SN_RES_DIS_CONFIGS, ResnetDiscriminator
 
 from GANs.distributions import NormalDistribution
 
@@ -73,7 +72,7 @@ def make_models(args):
     return generator
 
 
-def load_model_from_state_dict(root_dir, model_index=None, cuda=True):
+def load_model_from_state_dict(root_dir, model_index=None, cuda=True, verbose=False):
     args = json.load(open(os.path.join(root_dir, 'args.json')))
 
     if model_index is None:
@@ -82,11 +81,12 @@ def load_model_from_state_dict(root_dir, model_index=None, cuda=True):
             [int(name.split('.')[0].split('_')[-1]) for name in models
              if name.startswith('generator')])
 
-        print('using generator generator_{}.pt'.format(model_index))
+        if verbose:
+            print('using generator generator_{}.pt'.format(model_index))
     generator_model_path = os.path.join(root_dir, 'generator_{}.pt'.format(model_index))
 
     args = Args(**args)
-    generator, _ = make_models(args)
+    generator = make_models(args)
     generator.load_state_dict(
         torch.load(generator_model_path, map_location=torch.device('cpu')), strict=False)
     if cuda:

@@ -1,6 +1,7 @@
 import os
 import json
 import torch
+from collections import OrderedDict
 
 from run_train import DEFORMATOR_TYPE_DICT
 from models.gan_load import make_big_gan, make_proggan, make_external
@@ -9,7 +10,7 @@ from latent_shift_predictor import ResNetShiftPredictor, LeNetShiftPredictor
 from constants import WEIGHTS
 
 
-def load_from_dir(root_dir, model_index=None, G_weights=None):
+def load_from_dir(root_dir, model_index=None, G_weights=None, verbose=False):
     args = json.load(open(os.path.join(root_dir, 'args.json')))
 
     models_dir = os.path.join(root_dir, 'models')
@@ -19,13 +20,15 @@ def load_from_dir(root_dir, model_index=None, G_weights=None):
             [int(name.split('.')[0].split('_')[-1]) for name in models
              if name.startswith('deformator')])
 
-        print('using max index {}'.format(model_index))
+        if verbose:
+            print('using max index {}'.format(model_index))
 
 
     if G_weights is None:
         G_weights = args['gan_weights']
     if G_weights is None or not os.path.isfile(G_weights):
-        print('Using default local G weights')
+        if verbose:
+            print('Using default local G weights')
         G_weights = WEIGHTS[args['gan_type']]
 
     if args['gan_type'] == 'BigGAN':
@@ -53,7 +56,7 @@ def load_from_dir(root_dir, model_index=None, G_weights=None):
     directions_json = os.path.join(root_dir, 'directions.json')
     if os.path.isfile(directions_json):
         with open(directions_json, 'r') as f:
-            directions_dict = json.load(f)
+            directions_dict = json.load(f, object_pairs_hook=OrderedDict)
             setattr(deformator, 'directions_dict', directions_dict)
 
 
