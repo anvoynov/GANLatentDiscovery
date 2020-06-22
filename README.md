@@ -45,7 +45,7 @@ Run `evaluation.ipynb` notebook for the discovered directions inspection.
 Run `python download.py` to download all pretrained generators and latent directions.
 We also add `human_annotation.txt` file with annotation of some of directions.
 
-The pretrained models are the unchanged copies from the following source:
+The pretrained models are the unchanged copies from the following sources:
 `100_celeb_hq_network-snapshot-010403.pth` from https://github.com/ptrblck/prog_gans_pytorch_inference
 `G_ema.pth` from https://github.com/ajbrock/BigGAN-PyTorch and `stylegan2-ffhq-config-f.pkl` https://github.com/NVlabs/stylegan2
 converted with https://github.com/rosinality/stylegan2-pytorch
