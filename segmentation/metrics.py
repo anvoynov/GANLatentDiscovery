@@ -1,14 +1,14 @@
 import torch
-from torchvision.transforms import ToPILImage, ToTensor, Resize
 
+from torchvision.transforms import ToPILImage, ToTensor, Resize
 from torch_tools.utils import wrap_with_tqdm
 
 
-def resize(m, target_shape):
-    m = ToPILImage()(m.cpu().to(torch.float32))
-    m = Resize(target_shape)(m)
-    m = ToTensor()(m)
-    return m.cuda()
+def resize(x, target_shape):
+    x = ToPILImage()(x.cpu().to(torch.float32))
+    x = Resize(target_shape)(x)
+    x = ToTensor()(x)
+    return x.cuda()
 
 
 def IoU(mask1, mask2):
@@ -24,26 +24,33 @@ def MAE(mask1, mask2):
 
 
 def model_metrics(segmetation_model, dataloder, n_steps=None, stats=(IoU, MAE)):
-    avg_values = [0.0 for _ in stats]
+    avg_values = {}
+    out_dict = {}
 
+    n_steps = len(dataloder) if n_steps is None else n_steps
     step = 0
-    for step, (img, mask) in wrap_with_tqdm(enumerate(dataloder), total=len(dataloder)):
+    for step, (img, mask) in wrap_with_tqdm(enumerate(dataloder), total=n_steps):
         with torch.no_grad():
             img, mask = img.cuda(), mask.cuda()
 
-            logits = segmetation_model(img)
-            mask_prediction = torch.argmax(logits, dim=1, keepdim=False)
+        if img.shape[-2:] != mask.shape[-2:]:
+            mask = resize(mask, img.shape[-2:])
 
-            if img.shape[-2:] != mask.shape[-2:]:
-                print('resizing: {} -> {}'.format(img.shape[-2:], mask.shape[-2:]))
-                mask = resize(mask, img.shape[-2:])
+        prediction = segmetation_model(img)
 
-        for i, stat in enumerate(stats):
-            avg_values[i] += stat(mask, mask_prediction)
+        for metric in stats:
+            method = metric.__name__
+            if method not in avg_values:
+                avg_values[method] = 0.0
+
+            avg_values[method] += metric(mask, prediction)
 
         step += 1
         if n_steps is not None and step >= n_steps:
             break
 
-    out_dict = {stat.__name__: avg / step for stat, avg in zip(stats, avg_values)}
+    for metric in stats:
+        method = metric.__name__
+        out_dict[method] = avg_values[method] / step
+
     return out_dict

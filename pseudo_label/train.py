@@ -5,8 +5,6 @@ from torch.utils.data import DataLoader
 from pseudo_label.pseudo_label_classifier import PseudoLabelClassifier
 from pseudo_label.data import PseudoLabelDataset, ModelLabeledDataset
 
-from tqdm import tqdm_notebook
-
 
 def binary_classifier(train_dataloader, val_dataloader,
                       criterion=torch.nn.CrossEntropyLoss(), verbose=True, size=None):
@@ -18,7 +16,7 @@ def binary_classifier(train_dataloader, val_dataloader,
     n_steps = 50
     val_steps = 10
 
-    for step, sample in tqdm_notebook(enumerate(iter(train_dataloader))):
+    for step, sample in enumerate(iter(train_dataloader)):
         if step >= n_steps:
             break
 

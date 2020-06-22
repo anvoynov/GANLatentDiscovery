@@ -163,7 +163,7 @@ class Generator(nn.Module):
 
       # If attention on this block, attach it to the end
       if self.arch['attention'][self.arch['resolution'][index]]:
-        print('Adding attention layer in G at resolution %d' % self.arch['resolution'][index])
+        # print('Adding attention layer in G at resolution %d' % self.arch['resolution'][index])
         self.blocks[-1] += [layers.Attention(self.arch['out_channels'][index], self.which_conv)]
 
     # Turn self.blocks into a ModuleList so that it's all properly registered.

@@ -4,6 +4,7 @@ from torchvision.utils import make_grid
 from matplotlib import pyplot as plt
 from PIL import Image
 import io
+import os
 
 from torch_tools.visualization import to_image
 
@@ -22,10 +23,10 @@ def interpolate(G, z, shifts_r, shifts_count, dim, deformator=None, with_central
     shifted_images = []
     for shift in np.arange(-shifts_r, shifts_r + 1e-9, shifts_r / shifts_count):
         if deformator is not None:
-            z_deformed = z + deformator(one_hot(z.shape[1:], shift, dim).cuda())
+            latent_shift = deformator(one_hot(deformator.input_dim, shift, dim).cuda())
         else:
-            z_deformed = z + one_hot(z.shape[1:], shift, dim).cuda()
-        shifted_image = G(z_deformed).cpu()[0]
+            latent_shift = one_hot(G.dim_shift, shift, dim).cuda()
+        shifted_image = G.gen_shifted(z, latent_shift).cpu()[0]
         if shift == 0.0 and with_central_border:
             shifted_image = add_border(shifted_image)
 
@@ -46,7 +47,7 @@ def add_border(tensor):
 
 @torch.no_grad()
 def make_interpolation_chart(G, deformator=None, z=None,
-                             shifts_r=10, shifts_count=5,
+                             shifts_r=10.0, shifts_count=5,
                              dims=None, dims_count=10, texts=None, **kwargs):
     with_deformation = deformator is not None
     if with_deformation:
@@ -82,3 +83,36 @@ def make_interpolation_chart(G, deformator=None, z=None,
         deformator.train()
 
     return fig
+
+
+@torch.no_grad()
+def inspect_all_directions(G, deformator, out_dir, zs=None, num_z=3, shifts_r=8.0):
+    os.makedirs(out_dir, exist_ok=True)
+
+    step = 20
+    max_dim = G.dim_shift
+    zs = zs if zs is not None else make_noise(num_z, G.dim_z).cuda()
+    shifts_count = zs.shape[0]
+
+    for start in range(0, max_dim - 1, step):
+        imgs = []
+        dims = range(start, min(start + step, max_dim))
+        for z in zs:
+            z = z.unsqueeze(0)
+            fig = make_interpolation_chart(
+                G, deformator=deformator, z=z,
+                shifts_count=shifts_count, dims=dims, shifts_r=shifts_r,
+                dpi=250, figsize=(int(shifts_count * 4.0), int(0.5 * step) + 2))
+            fig.canvas.draw()
+            plt.close(fig)
+            img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
+            # crop borders
+            nonzero_columns = np.count_nonzero(img != 255, axis=0)[:, 0] > 0
+            img = img.transpose(1, 0, 2)[nonzero_columns].transpose(1, 0, 2)
+            imgs.append(img)
+
+        out_file = os.path.join(out_dir, '{}_{}.jpg'.format(dims[0], dims[-1]))
+        print('saving chart to {}'.format(out_file))
+        Image.fromarray(np.hstack(imgs)).save(out_file)

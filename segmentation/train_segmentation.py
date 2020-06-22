@@ -1,5 +1,4 @@
 import os
-import sys
 import argparse
 import json
 import torch
@@ -8,15 +7,22 @@ from tensorboardX import SummaryWriter
 import matplotlib
 matplotlib.use("Agg")
 
+from utils import save_command_run_params
 from constants import DEFORMATOR_TYPE_DICT, WEIGHTS
-
 from segmentation.unet_model import UNet
-
-from segmentation.gan_segmentation import MaskGenerator
+from segmentation.gan_segmentation import MaskGenerator, MaskSynthesizing, it_mask_gen
 from segmentation.data import SegmentationDataset
 from segmentation.metrics import model_metrics
 from models.gan_load import make_big_gan
 from latent_deformator import LatentDeformator
+from segmentation.metrics import MAE, IoU
+from segmentation.inference import SegmentationInference, Threshold
+
+
+mask_synthesizing_dict = {
+    'diff': MaskSynthesizing.DIFF,
+    'intensity': MaskSynthesizing.INTENSITY,
+}
 
 
 class SegmentationTrainParams(object):
@@ -45,22 +51,24 @@ class SegmentationTrainParams(object):
             if val is not None:
                 self.__dict__[key] = val
 
-
-def mix(x1, x2, p):
-    assert x1.shape == x2.shape, 'x1.shape != x2.shape'
-    mask = torch.rand([x1.shape[0]], device=x1.device) < p
-    mix = torch.empty_like(x1)
-    mix[mask] = x1[mask]
-    mix[mask.logical_not()] = x2[mask.logical_not()]
-    return mix
+        if isinstance(self.synthezing, str):
+            self.synthezing = mask_synthesizing_dict[self.synthezing]
 
 
-def train_segmentation(G, deformator, model, params, background_dim, out_dir):
+def train_segmentation(G, deformator, model, params, background_dim, out_dir,
+                       gen_devices, val_dirs=None):
+    model.train()
     os.makedirs(out_dir, exist_ok=True)
     writer = SummaryWriter(os.path.join(out_dir, 'tensorboard'))
 
-    mask_generator = MaskGenerator(G, deformator, background_dim,
-                                   params.latent_shift_r, params.mask_thr, params.use_diff)
+    params.batch_size = params.batch_size // len(gen_devices)
+
+    mask_generator = MaskGenerator(
+        G, deformator, background_dim, params).cuda().eval()
+    # form test batch
+    num_test_steps = params.test_samples_count // params.batch_size
+    test_samples = [mask_generator() for _ in range(num_test_steps)]
+    test_samples = [[s[0].cpu(), s[1].cpu()] for s in test_samples]
 
     optimizer = torch.optim.Adam(model.parameters(), lr=params.rate,
                                  weight_decay=params.weight_decay)
@@ -72,36 +80,21 @@ def train_segmentation(G, deformator, model, params, background_dim, out_dir):
     checkpoint = os.path.join(out_dir, 'checkpoint.pth')
     if os.path.isfile(checkpoint):
         start_step = load_checkpoint(model, optimizer, lr_scheduler, checkpoint)
-        print('Sartint from step {} checkpoint'.format(start_step))
+        print(f'Starting from step {start_step} checkpoint')
 
-    for step in range(start_step, params.n_steps, 1):
-        z = torch.randn([params.batch_size, G.dim_z]).cuda()
-        classes = G.mixed_classes(params.batch_size).cuda()
-
-        with torch.no_grad():
-            img = G(z, classes)
-        img_neg, img_pos, ref = mask_generator(z=z, classes=classes)
-        img = mix(img, img_pos, 1.0 - params.shifted_img_prob)
-
+    print('start loop', flush=True)
+    for step, (img, ref) in enumerate(it_mask_gen(mask_generator, torch.cuda.current_device())):
+        step += start_step
+        model.zero_grad()
         prediction = model(img)
-
-        if params.mask_size_low > 0.0 or params.mask_size_up < 1.0:
-            ref_size = ref.shape[-2] * ref.shape[-1]
-            ref_fraction = ref.sum(dim=[-1, -2]).to(torch.float) / ref_size
-            mask = (ref_fraction > params.mask_size_low) & (ref_fraction < params.mask_size_up)
-            if torch.sum(mask).item() < 2:
-                continue
-            prediction, ref = prediction[mask], ref[mask]
-
         loss = criterion(prediction, ref)
 
-        model.zero_grad()
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
 
         if step > 0 and step % params.steps_per_checkpoint_save == 0:
-            print('Step {}: saving checkpoint'.format(step))
+            print(f'Step {step}: saving checkpoint')
             save_checkpoint(model, optimizer, lr_scheduler, step, checkpoint)
 
         if step % 10 == 0:
@@ -110,20 +103,29 @@ def train_segmentation(G, deformator, model, params, background_dim, out_dir):
         if step > 0 and step % params.steps_per_log == 0:
             with torch.no_grad():
                 loss = 0.0
-                for i in range(params.test_steps):
-                    z = torch.randn([params.batch_size, G.dim_z]).cuda()
-                    classes = G.mixed_classes(params.batch_size).cuda()
-                    img = G(z, classes)
-                    _, _, ref = mask_generator(z=z, classes=classes)
-
-                    prediction = model(img)
-                    loss += criterion(prediction, ref).item()
-
-            loss = loss / params.test_steps
-            print('{}% | step {}: {}'.format(
-                int(100.0 * step / params.n_steps), step, loss))
+                for img, ref in test_samples:
+                    prediction = model(img.cuda())
+                    loss += criterion(prediction, ref.cuda()).item()
+            loss = loss / num_test_steps
+            print(f'{int(100.0 * step / params.n_steps)}% | step {step}: {loss}')
             writer.add_scalar('val/loss', loss, step)
 
+        is_val_step = \
+            (step > 0 and step % params.steps_per_validation == 0) or (step == params.n_steps)
+        if is_val_step and val_dirs is not None:
+            print(f'Step: {step} | evaluation')
+            model.eval()
+            mae_stat = evaluate(SegmentationInference(model, resize_to=128),
+                                val_dirs[0], val_dirs[1], (MAE,))
+            iou_stat = evaluate(Threshold(model, resize_to=128),
+                                val_dirs[0], val_dirs[1], (IoU,))
+
+            update_out_json({**mae_stat, **iou_stat}, os.path.join(out_dir, 'score.json'))
+            model.train()
+        if step == params.n_steps:
+            break
+
+    model.eval()
     torch.save(model.state_dict(), os.path.join(out_dir, 'segmentation.pth'))
 
 
@@ -144,21 +146,37 @@ def load_checkpoint(model, opt, scheduler, checkpoint):
     return state_dict['step']
 
 
-def evaluate(segmentation_model, images_dir, masks_dir, out_json, size=128):
-    segmentation_model.eval()
+def update_out_json(eval_dict, out_json):
+    out_dict = {}
+    if os.path.isfile(out_json):
+        with open(out_json, 'r') as f:
+            out_dict = json.load(f)
+
+    with open(out_json, 'w') as out:
+        out_dict.update(eval_dict)
+        json.dump(out_dict, out)
+
+
+def evaluate(segmentation_model, images_dir, masks_dir, metrics, size=None):
     segmentation_dl = torch.utils.data.DataLoader(
         SegmentationDataset(images_dir, masks_dir, size=size, crop=False), 1, shuffle=False)
 
-    iou, mae = model_metrics(segmentation_model, segmentation_dl).values()
-    print('Segmenation model IoU: {:.3}, MAE: {:.3}'.format(iou, mae))
-    with open(out_json, 'w') as out:
-        json.dump({'IoU': iou, 'MAE': mae}, out)
+    eval_out = model_metrics(segmentation_model, segmentation_dl, stats=metrics)
+    print('Segmenation model', eval_out)
+
+    return eval_out
+
+
+def keys_in_dict_tree(dict_tree, keys):
+    for key in keys:
+        if key not in dict_tree.keys():
+            return False
+        dict_tree = dict_tree[key]
+    return True
 
 
 def main():
     parser = argparse.ArgumentParser(description='GAN-based unsupervised segmentation train')
-    parser.add_argument('--args', type=str, default=None, help='json with all arguments')
-
     parser.add_argument('--out', type=str, required=True)
     parser.add_argument('--gan_weights', type=str, default=WEIGHTS['BigGAN'])
     parser.add_argument('--deformator_weights', type=str, required=True)
@@ -169,29 +187,19 @@ def main():
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--seed', type=int, default=2)
 
-    parser.add_argument('--val_images_dir', type=str)
-    parser.add_argument('--val_masks_dir', type=str)
+    parser.add_argument('--val_images_dir', type=str, default=None)
+    parser.add_argument('--val_masks_dir', type=str, default=None)
 
     for key, val in SegmentationTrainParams().__dict__.items():
-        parser.add_argument('--{}'.format(key), type=type(val), default=None)
+        val_type = type(val) if key is not 'synthezing' else str
+        parser.add_argument('--{}'.format(key), type=val_type, default=None)
 
     args = parser.parse_args()
     torch.random.manual_seed(args.seed)
 
     torch.cuda.set_device(args.device)
-    if args.args is not None:
-        with open(args.args) as args_json:
-            args_dict = json.load(args_json)
-            args.__dict__.update(**args_dict)
-
-    # save run params
-    if not os.path.isdir(args.out):
-        os.makedirs(args.out)
-    with open(os.path.join(args.out, 'args.json'), 'w') as args_file:
-        json.dump(args.__dict__, args_file)
-    with open(os.path.join(args.out, 'command.sh'), 'w') as command_file:
-        command_file.write(' '.join(sys.argv))
-        command_file.write('\n')
+    # save run p
+    save_command_run_params(args)
 
     if len(args.classes) == 0:
         print('using all ImageNet')
@@ -204,13 +212,11 @@ def main():
 
     model = UNet().train().cuda()
     train_params = SegmentationTrainParams(**args.__dict__)
-    print('run train with params: {}'.format(train_params.__dict__))
+    print(f'run train with p: {train_params.__dict__}')
 
-    train_segmentation(G, deformator, model, train_params, args.background_dim, args.out)
-
-    if args.val_images_dir is not None:
-        evaluate(model, args.val_images_dir, args.val_masks_dir,
-                 os.path.join(args.out, 'score.json'), 128)
+    train_segmentation(
+        G, deformator, model, train_params, args.background_dim, args.out,
+        val_dirs=[args.val_images_dirs, args.val_masks_dirs])
 
 
 if __name__ == '__main__':

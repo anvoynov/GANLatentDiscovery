@@ -18,7 +18,7 @@ torchvision\
 tqdm\
 tensorboardX
 
-see ```requirement.txt``` for exact authors environment.
+see `requirement.txt` for exact authors environment.
 
 ## Training
 
@@ -26,21 +26,29 @@ Here is a minimal example of latent rectification run command:
 ```
 python run_train.py \
     --gan_type BigGAN \
-    --gan_weights <path_to_generator_weights.pth> \
+    --gan_weights models/pretrained/generators/BigGAN/G_ema.pth \
     --deformator ortho \
-    --out <out_dir>
+    --out rectification_results_dir
 ```
-this script will save the latent space directions stored in ``LatentDeformator`` module weights. \
+this script will save the latent space directions stored in `LatentDeformator` module weights. \
 It also saves images charts with latent directions examples.
-```gan_type``` specifies the generator model.
+`gan_type` specifies the generator model.
+
+Note that you can pass as an argument any parameter of `Params` class defined in `trainer.py`
 
 ## Evaluation
 
-Run ```evaluation.ipynb``` notebook for the discovered directions inspection.
+Run `evaluation.ipynb` notebook for the discovered directions inspection.
 
 ## Pre-trained Models
 
-Comming _very_ soon
+Run `python download.py` to download all pretrained generators and latent directions.
+We also add `human_annotation.txt` file with annotation of some of directions.
+
+The pretrained models are the unchanged copies from the following source:
+`100_celeb_hq_network-snapshot-010403.pth` from https://github.com/ptrblck/prog_gans_pytorch_inference
+`G_ema.pth` from https://github.com/ajbrock/BigGAN-PyTorch and `stylegan2-ffhq-config-f.pkl` https://github.com/NVlabs/stylegan2
+converted with https://github.com/rosinality/stylegan2-pytorch
 
 ## Results
 

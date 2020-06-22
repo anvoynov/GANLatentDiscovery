@@ -16,16 +16,14 @@ class DeformatorType(Enum):
     RANDOM = 6
 
 
-
 class LatentDeformator(nn.Module):
-    def __init__(self, target_dim, inner_dim=1024, out_dim=None,
-                 type=DeformatorType.FC, random_init=False):
+    def __init__(self, shift_dim, input_dim=None, out_dim=None, inner_dim=1024,
+                 type=DeformatorType.FC, random_init=False, bias=True):
         super(LatentDeformator, self).__init__()
         self.type = type
-        self.input_dim = np.product(target_dim)
-        self.out_dim = out_dim
-        if out_dim is None:
-            self.out_dim = self.input_dim
+        self.shift_dim = shift_dim
+        self.input_dim = input_dim if input_dim is not None else np.product(shift_dim)
+        self.out_dim = out_dim if out_dim is not None else np.product(shift_dim)
 
         if self.type == DeformatorType.FC:
             self.fc1 = nn.Linear(self.input_dim, inner_dim)
@@ -43,13 +41,13 @@ class LatentDeformator(nn.Module):
             self.fc4 = nn.Linear(inner_dim, self.out_dim)
 
         elif self.type in [DeformatorType.LINEAR, DeformatorType.PROJECTIVE]:
-            self.linear = nn.Linear(self.input_dim, self.out_dim)
+            self.linear = nn.Linear(self.input_dim, self.out_dim, bias=bias)
             self.linear.weight.data = torch.zeros_like(self.linear.weight.data)
 
             min_dim = int(min(self.input_dim, self.out_dim))
             self.linear.weight.data[:min_dim, :min_dim] = torch.eye(min_dim)
             if random_init:
-                self.linear.weight.data += 0.1 * torch.randn_like(self.linear.weight.data)
+                self.linear.weight.data = 0.1 * torch.randn_like(self.linear.weight.data)
 
         elif self.type == DeformatorType.ORTHO:
             assert self.input_dim == self.out_dim, 'In/out dims must be equal for ortho'
@@ -61,7 +59,6 @@ class LatentDeformator(nn.Module):
             nn.init.orthogonal_(self.linear)
 
     def forward(self, input):
-        original_shape = input.shape
         if self.type == DeformatorType.ID:
             return input
 
@@ -90,7 +87,20 @@ class LatentDeformator(nn.Module):
             self.linear = self.linear.to(input.device)
             out = F.linear(input, self.linear)
 
-        return out.view(original_shape)
+        flat_shift_dim = np.product(self.shift_dim)
+        if out.shape[1] < flat_shift_dim:
+            padding = torch.zeros([out.shape[0], flat_shift_dim - out.shape[1]], device=out.device)
+            out = torch.cat([out, padding], dim=1)
+        elif out.shape[1] > flat_shift_dim:
+            out = out[:, :flat_shift_dim]
+
+        # handle spatial shifts
+        try:
+            out = out.view([-1] + self.shift_dim)
+        except Exception:
+            pass
+
+        return out
 
 
 def normal_projection_stat(x):
