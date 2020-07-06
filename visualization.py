@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torchvision.transforms import Resize
 from torchvision.utils import make_grid
 from matplotlib import pyplot as plt
 from PIL import Image
@@ -116,3 +117,17 @@ def inspect_all_directions(G, deformator, out_dir, zs=None, num_z=3, shifts_r=8.
         out_file = os.path.join(out_dir, '{}_{}.jpg'.format(dims[0], dims[-1]))
         print('saving chart to {}'.format(out_file))
         Image.fromarray(np.hstack(imgs)).save(out_file)
+
+
+def gen_animation(G, deformator, direction_index, out_file, z=None, size=None):
+    import imageio
+
+    if z is None:
+        z = torch.randn([1, G.dim_z], device='cuda')
+    interpolation_deformed = interpolate(
+        G, z, shifts_r=8, shifts_count=5,
+        dim=direction_index, deformator=deformator, with_central_border=False)
+
+    resize = Resize(size) if size is not None else lambda x: x
+    img = [resize(to_image(torch.clamp(im, -1, 1))) for im in interpolation_deformed]
+    imageio.mimsave(out_file, img + img[::-1])
