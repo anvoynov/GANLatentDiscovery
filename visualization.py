@@ -119,13 +119,13 @@ def inspect_all_directions(G, deformator, out_dir, zs=None, num_z=3, shifts_r=8.
         Image.fromarray(np.hstack(imgs)).save(out_file)
 
 
-def gen_animation(G, deformator, direction_index, out_file, z=None, size=None):
+def gen_animation(G, deformator, direction_index, out_file, z=None, size=None, r=8):
     import imageio
 
     if z is None:
         z = torch.randn([1, G.dim_z], device='cuda')
     interpolation_deformed = interpolate(
-        G, z, shifts_r=8, shifts_count=5,
+        G, z, shifts_r=r, shifts_count=5,
         dim=direction_index, deformator=deformator, with_central_border=False)
 
     resize = Resize(size) if size is not None else lambda x: x
