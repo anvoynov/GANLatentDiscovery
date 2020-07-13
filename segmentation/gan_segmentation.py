@@ -1,12 +1,7 @@
-from copy import deepcopy
-
 import torch
 from torch import nn
-from torch.nn import functional as F
-import numpy as np
 from enum import Enum
-from utils import one_hot, make_noise, run_in_background
-from utils.prefetch_generator import background
+from utils import one_hot, make_noise
 
 
 class MaskSynthesizing(Enum):
@@ -46,12 +41,11 @@ class MaskGenerator(nn.Module):
     @torch.no_grad()
     def make_noise(self, batch_size, device):
         if self.zs is None:
-            return make_noise(batch_size, self.G.dim_z, self.p.truncation).to(device)
+            return make_noise(batch_size, self.G.dim_z).to(device)
         else:
             indices = torch.randint(0, len(self.zs), [batch_size], dtype=torch.long)
             z = self.zs[indices].to(device)
             return z
-
 
     @torch.no_grad()
     def gen_samples(self, z=None, classes=None, batch_size=None, device='cpu'):
@@ -105,7 +99,6 @@ class MaskGenerator(nn.Module):
             if z is None or step > 1:
                 z = self.make_noise(self.p.batch_size, device)
                 classes = self.G.mixed_classes(self.p.batch_size).to(device)
-            z = self.augment_z(z)
 
             img_batch, img_pos_batch, ref_batch = \
                 self.gen_samples(z=z, classes=classes, device=device)

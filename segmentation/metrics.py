@@ -11,19 +11,12 @@ def resize(x, target_shape):
     return x.cuda()
 
 
-def IoU(mask1, mask2):
-    mask1, mask2 = mask1.to(torch.bool), mask2.to(torch.bool)
-    intersection = torch.sum(mask1 * (mask1 == mask2), dim=[-1, -2]).squeeze()
-    union = torch.sum(mask1 + mask2, dim=[-1, -2]).squeeze()
-    return (intersection.to(torch.float) / union).mean().item()
-
-
 def MAE(mask1, mask2):
     diff = mask1.to(torch.float32) - mask2.to(torch.float32)
     return torch.mean(torch.abs(diff)).item()
 
 
-def model_metrics(segmetation_model, dataloder, n_steps=None, stats=(IoU, MAE)):
+def model_metrics(segmetation_model, dataloder, n_steps=None, stats=(MAE,)):
     avg_values = {}
     out_dict = {}
 

@@ -24,7 +24,7 @@ def download(source, destination):
 def main():
     parser = argparse.ArgumentParser(description='Pretrained models loader')
     parser.add_argument('--models', nargs='+', type=str,
-                        choices=[list(SOURCES.keys()) + ['all']], default=['all'])
+                        choices=list(SOURCES.keys()) + ['all'], default=['all'])
     parser.add_argument('--out', type=str, help='root out dir')
 
     args = parser.parse_args()

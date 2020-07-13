@@ -15,7 +15,7 @@ from segmentation.data import SegmentationDataset
 from segmentation.metrics import model_metrics
 from models.gan_load import make_big_gan
 from latent_deformator import LatentDeformator
-from segmentation.metrics import MAE, IoU
+from segmentation.metrics import MAE
 from segmentation.inference import SegmentationInference, Threshold
 
 
@@ -33,16 +33,18 @@ class SegmentationTrainParams(object):
         self.rate_decay = 0.2
 
         self.latent_shift_r = 26
-        self.mask_thr = 0.99
-        self.use_diff = False
+        self.mask_thr = 0.95
+        self.synthezing = MaskSynthesizing.INTENSITY
+        self.temperature = 10.0
 
-        self.batch_size = 64
+        self.batch_size = 128
         self.shifted_img_prob = 0.0
 
-        self.n_steps = int(1e+4)
+        self.n_steps = 15000
         self.steps_per_log = 100
+        self.steps_per_validation = 1000
         self.steps_per_checkpoint_save = 1000
-        self.test_steps = 10
+        self.test_samples_count = 1000
 
         self.mask_size_low = 0.05
         self.mask_size_up = 0.5
@@ -55,13 +57,10 @@ class SegmentationTrainParams(object):
             self.synthezing = mask_synthesizing_dict[self.synthezing]
 
 
-def train_segmentation(G, deformator, model, params, background_dim, out_dir,
-                       gen_devices, val_dirs=None):
+def train_segmentation(G, deformator, model, params, background_dim, out_dir, val_dirs=None):
     model.train()
     os.makedirs(out_dir, exist_ok=True)
     writer = SummaryWriter(os.path.join(out_dir, 'tensorboard'))
-
-    params.batch_size = params.batch_size // len(gen_devices)
 
     mask_generator = MaskGenerator(
         G, deformator, background_dim, params).cuda().eval()
@@ -87,7 +86,7 @@ def train_segmentation(G, deformator, model, params, background_dim, out_dir,
         step += start_step
         model.zero_grad()
         prediction = model(img)
-        loss = criterion(prediction, ref)
+        loss = criterion(prediction / params.temperature, ref)
 
         loss.backward()
         optimizer.step()
@@ -105,7 +104,7 @@ def train_segmentation(G, deformator, model, params, background_dim, out_dir,
                 loss = 0.0
                 for img, ref in test_samples:
                     prediction = model(img.cuda())
-                    loss += criterion(prediction, ref.cuda()).item()
+                    loss += criterion(prediction / params.temperature, ref.cuda()).item()
             loss = loss / num_test_steps
             print(f'{int(100.0 * step / params.n_steps)}% | step {step}: {loss}')
             writer.add_scalar('val/loss', loss, step)
@@ -117,10 +116,7 @@ def train_segmentation(G, deformator, model, params, background_dim, out_dir,
             model.eval()
             mae_stat = evaluate(SegmentationInference(model, resize_to=128),
                                 val_dirs[0], val_dirs[1], (MAE,))
-            iou_stat = evaluate(Threshold(model, resize_to=128),
-                                val_dirs[0], val_dirs[1], (IoU,))
-
-            update_out_json({**mae_stat, **iou_stat}, os.path.join(out_dir, 'score.json'))
+            update_out_json(mae_stat, os.path.join(out_dir, 'score.json'))
             model.train()
         if step == params.n_steps:
             break
@@ -216,7 +212,7 @@ def main():
 
     train_segmentation(
         G, deformator, model, train_params, args.background_dim, args.out,
-        val_dirs=[args.val_images_dirs, args.val_masks_dirs])
+        val_dirs=[args.val_images_dir, args.val_masks_dir])
 
 
 if __name__ == '__main__':

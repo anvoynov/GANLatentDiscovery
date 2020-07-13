@@ -23,6 +23,7 @@ class SegmentationDataset(Dataset):
         resize = transforms.Compose([
             central_crop if crop else _id,
             transforms.Resize(size) if size is not None else _id,
+            lambda img: img.convert('RGB'),
             transforms.ToTensor()])
         shift_to_zero = lambda x: 2 * x - 1
         self.images_ds = TransformedDataset(images_ds, transforms.Compose([resize, shift_to_zero]))
