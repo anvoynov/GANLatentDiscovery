@@ -24,8 +24,6 @@ def main():
     parser.add_argument('--out', type=str, required=True, help='results directory')
     parser.add_argument('--gan_type', type=str, choices=WEIGHTS.keys(), help='generator model type')
     parser.add_argument('--gan_weights', type=str, default=None, help='path to generator weights')
-    parser.add_argument('--target_class', nargs='+', type=int, default=[239],
-                        help='classes to use for conditional GANs')
 
     parser.add_argument('--deformator', type=str, default='ortho',
                         choices=DEFORMATOR_TYPE_DICT.keys(), help='deformator type')
@@ -43,8 +41,12 @@ def main():
                         help='Run generator in parallel. Be aware of old pytorch versions:\
                               https://github.com/pytorch/pytorch/issues/17345')
     # model-specific
+    parser.add_argument('--target_class', nargs='+', type=int, default=[239],
+                        help='classes to use for conditional GANs')
     parser.add_argument('--w_shift', type=bool, default=True,
-                        help='latent directions search in w-space for StyleGAN')
+                        help='latent directions search in w-space for StyleGAN2')
+    parser.add_argument('--gan_resolution', type=int, default=1024,
+                        help='generator out images resolution. Required only for StyleGAN2')
 
     args = parser.parse_args()
     torch.cuda.set_device(args.device)
@@ -59,7 +61,7 @@ def main():
     else:
         weights_path = WEIGHTS[args.gan_type]
 
-    G = load_generator(args.__dict__, weights_path, args.w_shift)
+    G = load_generator(args.__dict__, weights_path)
 
     deformator = LatentDeformator(shift_dim=G.dim_shift,
                                   input_dim=args.directions_count,

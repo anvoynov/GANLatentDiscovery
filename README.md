@@ -32,7 +32,7 @@ python run_train.py \
 ```
 this script will save the latent space directions stored in `LatentDeformator` module weights. \
 It also saves images charts with latent directions examples.
-`gan_type` specifies the generator model.
+`gan_type` specifies the generator model. Take into consideration model-specific parameters for StyleGAN2 (`gan_resolution`, `w_shift`) and BigGAN (`target_class`).
 
 Note that you can pass as an argument any parameter of `Params` class defined in `trainer.py`
 

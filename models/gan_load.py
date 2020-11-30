@@ -81,8 +81,7 @@ def make_big_gan(weights_root, target_class):
     config['no_optim'] = True
 
     G = BigGAN.Generator(**config)
-    G.load_state_dict(torch.load(config['weights_root'], map_location=torch.device('cpu')),
-                      strict=True)
+    G.load_state_dict(torch.load(config['weights_root'], map_location='cpu'), strict=True)
 
     return ConditionedBigGAN(G, target_class).cuda()
 
@@ -90,7 +89,7 @@ def make_big_gan(weights_root, target_class):
 @gan_with_shift
 def make_proggan(weights_root):
     model = ProgGenerator()
-    model.load_state_dict(torch.load(weights_root))
+    model.load_state_dict(torch.load(weights_root, map_location='cpu'))
     model.cuda()
 
     setattr(model, 'dim_z', [512, 1, 1])
@@ -108,7 +107,7 @@ def make_sngan(gan_dir):
 
 def make_style_gan2(size, weights, shift_in_w=True):
     G = StyleGAN2Generator(size, 512, 8)
-    G.load_state_dict(torch.load(weights)['g_ema'])
+    G.load_state_dict(torch.load(weights, map_location='cpu')['g_ema'])
     G.cuda().eval()
 
     return StyleGAN2Wrapper(G, shift_in_w=shift_in_w)
