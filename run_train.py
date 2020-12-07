@@ -70,10 +70,11 @@ def main():
                                   random_init=args.deformator_random_init).cuda()
 
     if args.shift_predictor == 'ResNet':
-        shift_predictor = LatentShiftPredictor(G.dim_shift, args.shift_predictor_size).cuda()
+        shift_predictor = LatentShiftPredictor(
+            deformator.input_dim, args.shift_predictor_size).cuda()
     elif args.shift_predictor == 'LeNet':
         shift_predictor = LeNetShiftPredictor(
-            G.dim_shift, 1 if args.gan_type == 'SN_MNIST' else 3).cuda()
+            deformator.input_dim, 1 if args.gan_type == 'SN_MNIST' else 3).cuda()
 
     # training
     args.shift_distribution = SHIFT_DISTRIDUTION_DICT[args.shift_distribution_key]

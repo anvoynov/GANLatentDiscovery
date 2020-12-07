@@ -2,11 +2,10 @@ import os
 import json
 import torch
 
-from constants import DEFORMATOR_TYPE_DICT, HUMAN_ANNOTATION_FILE
-from models.gan_load import make_big_gan, make_proggan, make_style_gan2, make_sngan
+from constants import DEFORMATOR_TYPE_DICT, HUMAN_ANNOTATION_FILE, WEIGHTS
 from latent_deformator import LatentDeformator
 from latent_shift_predictor import LatentShiftPredictor, LeNetShiftPredictor
-from constants import WEIGHTS
+from models.gan_load import make_big_gan, make_proggan, make_sngan
 
 
 def load_generator(args, G_weights):
@@ -16,6 +15,7 @@ def load_generator(args, G_weights):
     elif gan_type in ['ProgGAN']:
         G = make_proggan(G_weights)
     elif 'StyleGAN2' in gan_type:
+        from models.gan_load import make_style_gan2
         G = make_style_gan2(args['gan_resolution'], G_weights, args['w_shift'])
     else:
         G = make_sngan(G_weights)

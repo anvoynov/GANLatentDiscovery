@@ -71,7 +71,7 @@ class Trainer(object):
         target_indices = torch.randint(
             0, self.p.directions_count, [self.p.batch_size], device='cuda')
         if self.p.shift_distribution == ShiftDistribution.NORMAL:
-            shifts =  torch.randn(target_indices.shape, device='cuda')
+            shifts = torch.randn(target_indices.shape, device='cuda')
         elif self.p.shift_distribution == ShiftDistribution.UNIFORM:
             shifts = 2.0 * torch.rand(target_indices.shape, device='cuda') - 1.0
 
