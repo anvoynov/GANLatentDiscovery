@@ -66,6 +66,19 @@ _BigBiGAN - ImageNet - light direction_
 
 _BigGAN - ImageNet - rotation_
 
+## Citation
+
+```
+@inproceedings{voynov2020unsupervised,
+  title={Unsupervised discovery of interpretable directions in the gan latent space},
+  author={Voynov, Andrey and Babenko, Artem},
+  booktitle={International Conference on Machine Learning},
+  pages={9786--9796},
+  year={2020},
+  organization={PMLR}
+}
+```
+
 ## Credits
 BigGAN code and weights are based on the authors implementation:
 https://github.com/ajbrock/BigGAN-PyTorch
