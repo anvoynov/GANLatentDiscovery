@@ -53,10 +53,10 @@ def load_from_dir(root_dir, model_index=None, G_weights=None, shift_in_w=True):
         type=DEFORMATOR_TYPE_DICT[args['deformator']])
 
     if 'shift_predictor' not in args.keys() or args['shift_predictor'] == 'ResNet':
-        shift_predictor = LatentShiftPredictor(G.dim_shift)
+        shift_predictor = LatentShiftPredictor(args['directions_count'] if 'directions_count' in args.keys() else None)
     elif args['shift_predictor'] == 'LeNet':
         shift_predictor = LeNetShiftPredictor(
-            G.dim_shift, 1 if args['gan_type'] == 'SN_MNIST' else 3)
+            args['directions_count'] if 'directions_count' in args.keys() else None, 1 if args['gan_type'] == 'SN_MNIST' else 3)
 
     deformator_model_path = os.path.join(models_dir, 'deformator_{}.pt'.format(model_index))
     shift_model_path = os.path.join(models_dir, 'shift_predictor_{}.pt'.format(model_index))
